@@ -154,25 +154,28 @@ if (probe) {
     `${ltAt1095} > ${ltAt365}`);
 }
 
-// Render every universe x sleeve at every threshold. The tab is the only place
-// these templates run, so this is what catches a bad interpolation.
-for (const key of runs) {
-  const i = key.indexOf('_');
-  for (const rule of [365, 730, 1095]) {
-    ctx.state.universe = key.slice(0, i);
-    ctx.state.variant = key.slice(i + 1);
-    try {
-      ctx.setChurnRule(rule);
-    } catch (e) {
-      check(`${key} renders at a ${rule}-day rule`, false, e.message);
-    }
+// Render the tab at every threshold. MAQS shows ONE strategy — the fixed
+// UNIVERSE/SLEEVE — so that is the only combination the renderer supports; the
+// reconstruction above is still checked against all 16 runs, which is where the
+// regression value lies. The tab is the only place these templates run, so this
+// is what catches a bad interpolation.
+const HOME = { u: ctx.state.universe, v: ctx.state.variant };
+check('terminal is pinned to All Indices', HOME.u === 'T759', HOME.u);
+check('terminal is pinned to the full sleeve', HOME.v === 'goldsilver', HOME.v);
+for (const rule of [365, 730, 1095]) {
+  try {
+    ctx.setChurnRule(rule);
+  } catch (e) {
+    check(`renders at a ${rule}-day rule`, false, e.message);
   }
 }
-// A universe with no published books must fall back, not throw.
+// A run with no published books must fall back, not throw.
 ctx.state.universe = 'NOSUCH';
-ctx.state.variant = 'base';
 try { ctx.setChurnRule(365); } catch (e) { check('missing run falls back to N/A', false, e.message); }
-check('missing run has no churn data', ctx.churnData('NOSUCH', 'base') === null);
+check('missing run has no churn data', ctx.churnData('NOSUCH', HOME.v) === null);
+ctx.state.universe = HOME.u;
+ctx.state.variant = HOME.v;
+ctx.setChurnRule(365);
 
 // ── TRAILING RETURNS ──────────────────────────────────────────────────────
 // 1Y / 2Y / 3Y must be the SAME calculation over a longer slice, and a period

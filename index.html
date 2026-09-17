@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SQE MultiAsset ProQuant — Equity + Gold + Silver</title>
-  <meta name="description" content="Institutional-grade multi-asset portfolio analytics: SQE equity strategy with a fixed GOLDBEES / SILVERBEES bullion sleeve, across Nifty 50, Nifty 500 and All Indices.">
+  <title>MAQS — All Indices, Equity + Gold + Silver</title>
+  <meta name="description" content="MAQS — institutional-grade multi-asset portfolio analytics: the All Indices equity strategy run with a fixed 10% GOLDBEES / 10% SILVERBEES bullion sleeve.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Roboto+Mono:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -19,7 +19,7 @@
       <div class="modal-header">
         <div>
           <span class="modal-month" id="modal-month"></span>
-          <span class="modal-sub">Monthly performance — every variant vs benchmark</span>
+          <span class="modal-sub">Monthly performance against the benchmark</span>
         </div>
         <button class="modal-close" onclick="closeModal()">✕</button>
       </div>
@@ -39,11 +39,11 @@
                onerror="document.getElementById('brand-logo-chip').style.display='none';
                         document.getElementById('brand-fallback').style.display='flex';">
         </div>
-        <div class="brand-badge" id="brand-fallback" style="display:none">SQE</div>
+        <div class="brand-badge" id="brand-fallback" style="display:none">MAQS</div>
         <div>
-          <h1 class="brand-title">SQE MultiAsset ProQuant
-            <span style="font-size:0.7rem; vertical-align:middle; opacity:0.6">Equity + Gold + Silver</span>
-            <span style="font-size:0.6rem; vertical-align:middle; opacity:0.5">v1.0.0</span>
+          <h1 class="brand-title">MAQS
+            <span style="font-size:0.7rem; vertical-align:middle; opacity:0.6">All Indices · Equity + Gold + Silver</span>
+            <span style="font-size:0.6rem; vertical-align:middle; opacity:0.5">v2.0.0</span>
           </h1>
           <p id="last-refresh" class="brand-sub mono"></p>
           <p id="backtest-period" class="brand-sub mono" style="opacity:.65;font-size:.7rem;margin-top:.1rem"></p>
@@ -54,12 +54,6 @@
           <button class="export-btn" onclick="exportReport()">
             <span>📥</span> Export Report
           </button>
-          <div class="univ-switch">
-            <button class="univ-btn" id="btn-N50" onclick="switchUniverse('N50')">Nifty 50</button>
-            <button class="univ-btn" id="btn-N500" onclick="switchUniverse('N500')">Nifty 500</button>
-            <button class="univ-btn active" id="btn-T759" onclick="switchUniverse('T759')">All Indices</button>
-            <button class="univ-btn" id="btn-HQ" onclick="switchUniverse('HQ')">High Quality</button>
-          </div>
           <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Toggle Light/Dark Mode">
             <span class="sun">☀️</span>
             <span class="moon">🌙</span>
@@ -79,14 +73,11 @@
       <button class="nav-btn"        data-tab="portfolio" onclick="switchTab('portfolio')">Live Portfolio</button>
     </nav>
 
-    <!-- GLOBAL SLEEVE SELECTOR -->
+    <!-- THE SLEEVE — fixed, stated rather than selected -->
     <div class="glass-card" style="margin-bottom:1.25rem;padding:.75rem 1rem">
-      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.75rem">
-        <div>
-          <h3 class="card-title" style="font-size:.8rem">Bullion Sleeve</h3>
-          <span class="card-sub" id="sleeve-sub"></span>
-        </div>
-        <div class="layer-tabs" id="variant-tabs"></div>
+      <div>
+        <h3 class="card-title" style="font-size:.8rem">Strategy</h3>
+        <span class="card-sub" id="sleeve-sub"></span>
       </div>
     </div>
 
@@ -143,8 +134,8 @@
         <div class="glass-card">
           <div class="card-header">
             <div>
-              <h3 class="card-title">Growth of ₹1 — Every Sleeve</h3>
-              <span class="card-sub">Compounded monthly, same window for all variants</span>
+              <h3 class="card-title">Growth of ₹1</h3>
+              <span class="card-sub">Compounded monthly against the benchmark</span>
             </div>
             <div class="chart-controls" data-for="equityOverview"></div>
           </div>
@@ -165,21 +156,12 @@
         </div>
       </div>
 
-      <div class="grid-2" style="margin-top:1.5rem">
-        <div class="glass-card">
-          <div class="card-header">
-            <div>
-              <h3 class="card-title">What the Bullion Sleeve Changed</h3>
-              <span class="card-sub">Each variant vs Equity Only</span>
-            </div>
-          </div>
-          <div id="lift-container" style="padding:.5rem 1rem 1rem"></div>
-        </div>
+      <div style="margin-top:1.5rem">
         <div class="glass-card">
           <div class="card-header">
             <div>
               <h3 class="card-title">Risk vs Reward</h3>
-              <span class="card-sub">Annualised volatility against CAGR</span>
+              <span class="card-sub">Annualised volatility against CAGR — MAQS, the benchmark and each metal on its own</span>
             </div>
           </div>
           <div class="chart-area-sm">
@@ -198,9 +180,8 @@
         <div class="card-header">
           <div>
             <h3 class="card-title">Monthly PnL Heatmap</h3>
-            <span class="card-sub">Click any cell to compare every variant against the benchmark</span>
+            <span class="card-sub">Click any cell to open the book that produced that month</span>
           </div>
-          <div class="layer-tabs" id="heatmap-variant-tabs"></div>
         </div>
         <div id="heatmap-container"></div>
       </div>
@@ -318,18 +299,6 @@
         </div>
         <div style="overflow-x:auto">
           <table class="data-table" id="execTable"></table>
-        </div>
-      </div>
-
-      <div class="glass-card" style="margin-top:1.5rem">
-        <div class="card-header">
-          <div>
-            <h3 class="card-title">Cross-Universe Matrix</h3>
-            <span class="card-sub">Every universe against every sleeve</span>
-          </div>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="data-table" id="crossTable"></table>
         </div>
       </div>
     </section>
@@ -561,9 +530,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
   <!-- Data must load before app -->
-  <script src="data.js?v=11"></script>
-  <script src="holdings.js?v=11"></script>
-  <script src="app.js?v=11"></script>
-  <script src="factsheet.js?v=11"></script>
+  <script src="data.js?v=12"></script>
+  <script src="holdings.js?v=12"></script>
+  <script src="app.js?v=12"></script>
+  <script src="factsheet.js?v=12"></script>
 </body>
 </html>

@@ -1,10 +1,30 @@
-# SQE MultiAsset ProQuant — Equity + Gold + Silver
+# MAQS — All Indices, Equity + Gold + Silver
 
 Institutional-grade multi-asset portfolio analytics for the Sharpe Efficient
-Portfolio (SQE) strategy run with a **fixed bullion sleeve** across three
-universes: **Nifty 50**, **Nifty 500** and **All Indices**.
+Portfolio strategy run over the **All Indices** universe with a **fixed bullion
+sleeve**: 80% stocks, 10% GOLDBEES, 10% SILVERBEES.
 
 This is a static dashboard (HTML / CSS / vanilla JS) served from GitHub Pages.
+
+## One strategy, not a comparison tool
+
+MAQS reports a single book. There is **no universe switch and no sleeve switch**:
+the terminal is pinned to All Indices + Equity + Gold + Silver, and every chart,
+table and export describes that one strategy against its benchmark.
+
+`data.js` still carries the other universes (Nifty 50, Nifty 500, High Quality)
+and the other sleeves (Equity Only, +Gold, +Silver), because one pipeline builds
+them all — but nothing in the terminal reads them. In `app.js` that is enforced
+by two constants and a single-entry list:
+
+```js
+const UNIVERSE = 'T759';
+const SLEEVE   = 'goldsilver';
+const VKEYS    = [SLEEVE];
+```
+
+Every renderer maps over `VKEYS`, so widening the terminal again means putting
+keys back into that list, not rewriting the renderers.
 
 ## The strategy
 
@@ -16,15 +36,11 @@ alongside the equity basket. Metals never compete with stocks for a slot.
 
 | Sleeve | Stocks | Gold | Silver |
 |---|---|---|---|
-| Equity Only (control) | 100% | — | — |
-| Equity + Gold | 90% | 10% | — |
-| Equity + Silver | 90% | — | 10% |
-| Equity + Gold + Silver | 80% | 10% | 10% |
+| **MAQS — Equity + Gold + Silver** | **80%** | **10%** | **10%** |
 
 ## Backtest window
 
-**Jan 2022 – latest completed month**, identical for every sleeve within a
-universe so the comparison is like-for-like.
+**Jan 2022 – latest completed month.**
 
 Returns follow the engine's trade convention: the basket is formed on the signal
 month's close, bought at the trade month's open and sold at its close.
@@ -57,14 +73,6 @@ months it actually traded, with the benchmark and risk-free series sliced to
 match. `data.js` records the boundary as `meta.window.silver_from` and
 `meta.window.months_without_silver`.
 
-### High Quality starts later
-
-The HQ universe begins **2023-06**, not 2022-01. Its fundamental screen is driven
-by `quarterly_eligibility.csv`, whose first hold month is 2023-06. That is a
-limit of the source data, so the HQ window is shorter by design, and its
-trailing-return table reports any period it cannot fill as `N/A` rather than
-quietly spanning fewer months.
-
 ### The live month
 
 The newest month is usually still running. Its book is formed and traded, but
@@ -82,7 +90,7 @@ month's close, i.e. the basket being held right now.
 
 Clicking any cell in the PnL heatmap opens the book that actually produced that
 month: the month's Nifty 50 / Nifty 500 returns, portfolio beta and ex-ante
-Sharpe, every sleeve's return against the benchmark, and the full holdings list
+Sharpe, the month's return against the benchmark, and the full holdings list
 with an investment calculator.
 
 Two per-holding figures are shown and they are not the same thing:
@@ -233,10 +241,11 @@ Two limits worth stating plainly:
   spell in the same way a sale does. The monthly books carry no exit reason, so
   the two are indistinguishable from this data.
 
-The tab follows the universe and sleeve selectors like every other tab. There is
-no global date-range filter on this dashboard, so it covers the whole backtest
-window. It does not vary with **Portfolio Size**, because `sizeBook()` keeps at
-least one share of every holding, so the set of names is the same at any amount.
+There is no universe, sleeve or date-range filter on this dashboard, so the tab
+covers the whole backtest window for the one strategy. It does not vary with
+**Portfolio Size** either, because `sizeBook()` keeps at least one share of every
+holding, so the set of names is the same at any amount. The long-term threshold
+selector is the only control on the tab.
 
 ## Files
 - `index.html` — page shell and layout

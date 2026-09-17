@@ -17,12 +17,12 @@
   'use strict';
 
   var CFG = {
-    model:      'SQE MultiAsset ProQuant',
-    modelLong:  'SQE MultiAsset ProQuant — Equity + Bullion',
-    siteUrl:    'https://smcresearch.github.io/SQE-MultiAsset-ProQuant/',
-    siteLabel:  'smcresearch.github.io/SQE-MultiAsset-ProQuant/',
+    model:      'MAQS',
+    modelLong:  'MAQS — All Indices, Equity + Gold + Silver',
+    siteUrl:    'https://smcresearch.github.io/MAQS/',
+    siteLabel:  'smcresearch.github.io/MAQS/',
     logo:       'assets/smc-logo.webp',
-    filePrefix: 'SQE_MultiAsset_Factsheet',
+    filePrefix: 'MAQS_Factsheet',
     riskLabel:  'High Volatility',
     horizon:    'Long Term',
     maxWeight:  '10%'
@@ -73,7 +73,8 @@
     var D = (typeof MULTIASSET_DATA !== 'undefined') ? MULTIASSET_DATA : null;
     if (!D) return null;
 
-    var uKey = (typeof state !== 'undefined' && state && state.universe) || 'N500';
+    // MAQS is one universe; the fallback matches it rather than the old default.
+    var uKey = (typeof state !== 'undefined' && state && state.universe) || 'T759';
     var vKey = (typeof state !== 'undefined' && state && state.variant) || 'goldsilver';
     var R = D.runs && D.runs[uKey + '_' + vKey];
     if (!R) return null;

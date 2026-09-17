@@ -1,23 +1,29 @@
-/* SQE MultiAsset ProQuant — Equity + Gold + Silver terminal */
+/* MAQS — All Indices, Equity + Gold + Silver */
 
 const M = MULTIASSET_DATA;
 
-/* The four sleeves. Keys match the run keys in data.js (N500_goldsilver etc.). */
+/* MAQS is ONE strategy, not a comparison tool: the All Indices universe run
+   with the full Equity + Gold + Silver sleeve. data.js still carries the other
+   universes and sleeves because the same pipeline builds them, but nothing here
+   selects between them — there is no universe switch and no sleeve switch.
+
+   UNIVERSE and SLEEVE are therefore the only run this file ever reads, and
+   VKEYS is the single-entry list every chart maps over. Widening the terminal
+   again is a matter of putting keys back into VKEYS, not of rewriting the
+   renderers. */
+const UNIVERSE = 'T759';
+const SLEEVE = 'goldsilver';
 const VARIANTS = {
-  base:       { label: 'Equity Only',            short: 'Equity',       color: '#64748b' },
-  gold:       { label: 'Equity + Gold',          short: '+Gold',        color: '#f4b942' },
-  silver:     { label: 'Equity + Silver',        short: '+Silver',      color: '#9fb3c8' },
-  goldsilver: { label: 'Equity + Gold + Silver', short: '+Gold+Silver', color: '#22d3ee' }
+  goldsilver: { label: 'Equity + Gold + Silver', short: 'MAQS', color: '#22d3ee' }
 };
-const VKEYS = Object.keys(VARIANTS);
+const VKEYS = [SLEEVE];
 const BENCH_COLOR = '#8b5cf6';
-const UNIV_LABEL = { N50: 'Nifty 50', N500: 'Nifty 500', T759: 'All Indices', HQ: 'High Quality' };
+const UNIV_LABEL = { T759: 'All Indices' };
 
 let state = {
-  universe: 'T759',
-  variant: 'goldsilver',
+  universe: UNIVERSE,
+  variant: SLEEVE,
   tab: 'overview',
-  heatVariant: 'goldsilver',
   // Long-term holding threshold in days, used by the Churning tab. 365 is the
   // Indian listed-equity rule; the tab lets it be changed.
   ltDays: 365,
@@ -169,7 +175,7 @@ function amountMetrics(u, v) {
   if (_metricCache[ck]) return _metricCache[ck];
   const model = M.runs[`${u}_${v}`];
   const s = amountSeries(u, v);
-  const m = computeMetrics(s.rets, benchRets(u), mon(u, 'base').map(r => r.rf));
+  const m = computeMetrics(s.rets, benchRets(u), mon(u, SLEEVE).map(r => r.rf));
   // Carry over what does not depend on sizing: labels, sleeve weights, and the
   // engine's ex-ante forecasts (made at formation, before any rupee figure).
   _metricCache[ck] = {
@@ -191,8 +197,12 @@ function run(u = state.universe, v = state.variant) {
   return sized(u, v) ? amountMetrics(u, v) : M.runs[`${u}_${v}`];
 }
 function mon(u = state.universe, v = state.variant) { return M.monthly[`${u}_${v}`]; }
-function months(u = state.universe) { return mon(u, 'base').map(r => r.trade_month); }
-function benchRets(u = state.universe) { return mon(u, 'base').map(r => r.bench_ret); }
+/* The month list, benchmark and risk-free series are properties of the universe,
+   not of the sleeve — every sleeve of a universe carries the identical values —
+   so these read the one run the terminal displays rather than the retired
+   'base' run, which is no longer surfaced anywhere. */
+function months(u = state.universe) { return mon(u, SLEEVE).map(r => r.trade_month); }
+function benchRets(u = state.universe) { return mon(u, SLEEVE).map(r => r.bench_ret); }
 function portRets(u = state.universe, v = state.variant) {
   return sized(u, v) ? amountSeries(u, v).rets : mon(u, v).map(r => r.port_ret);
 }
@@ -258,20 +268,10 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const fmtMonth = m => MON[+String(m).slice(5, 7) - 1] + ' ' + String(m).slice(0, 4);
 
 /* ── GLOBAL CONTROLS ─────────────────────────── */
-function switchUniverse(u) {
-  state.universe = u;
-  ['N50', 'N500', 'T759', 'HQ'].forEach(k =>
-    document.getElementById('btn-' + k)?.classList.toggle('active', k === u));
-  renderHeader();
-  renderTab(state.tab);
-}
-
-function switchVariant(v) {
-  state.variant = v;
-  renderVariantTabs();
-  renderHeader();
-  renderTab(state.tab);
-}
+/* switchUniverse / switchVariant are gone: MAQS is a single strategy, so the
+   universe and sleeve are fixed at UNIVERSE / SLEEVE and there is nothing to
+   switch between. Portfolio Size is the only control left that restates the
+   numbers. */
 
 function setSizingMode(mode) {
   sizing.mode = mode;
@@ -321,7 +321,7 @@ function toggleTheme() {
 
 function closeModal() { document.getElementById('hmModal').classList.remove('open'); }
 
-/* Download the full monthly series for the active universe — every sleeve plus
+/* Download the full monthly series — the strategy plus
    the benchmark — so anything on screen can be checked in a spreadsheet. */
 function exportReport() {
   const u = state.universe, ms = months(u), b = benchRets(u);
@@ -338,13 +338,11 @@ function exportReport() {
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `SQE_MultiAsset_${u}_monthly_returns.csv`;
+  a.download = `MAQS_monthly_returns.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-window.switchUniverse = switchUniverse;
-window.switchVariant = switchVariant;
 window.switchTab = switchTab;
 window.switchChartType = switchChartType;
 window.toggleTheme = toggleTheme;
@@ -472,20 +470,14 @@ function renderHeader() {
      it editorialised the sleeve comparison in the masthead, where the same
      figures are already reported plainly in the metric tiles below. */
 
+  // The sleeve is fixed, so its composition is stated rather than selected.
   const sub = document.getElementById('sleeve-sub');
-  if (state.variant === 'base') {
-    sub.textContent = '100% stocks — the control run every overlay is measured against.';
-  } else {
-    sub.textContent = `${pct(r.stock_w, 0)} stocks · ${pct(r.gold_w, 0)} GOLDBEES · ${pct(r.silver_w, 0)} SILVERBEES — `
-      + 'fixed weights of total capital, rebalanced monthly with the equity basket.'
+  if (sub) {
+    sub.textContent = `${UNIV_LABEL[state.universe]} · ${pct(r.stock_w, 0)} stocks · `
+      + `${pct(r.gold_w, 0)} GOLDBEES · ${pct(r.silver_w, 0)} SILVERBEES — fixed weights of total `
+      + 'capital, rebalanced monthly with the equity basket.'
       + (noSilver ? ` Until ${fmtMonth(sw)} the silver weight goes to stocks, since SILVERBEES did not yet trade.` : '');
   }
-}
-
-function renderVariantTabs() {
-  document.getElementById('variant-tabs').innerHTML = VKEYS.map(v =>
-    `<button class="layer-tab-btn ${v === state.variant ? 'active' : ''}"
-       onclick="switchVariant('${v}')">${VARIANTS[v].label}</button>`).join('');
 }
 
 function renderSizingBar() {
@@ -589,7 +581,6 @@ function renderOverview() {
   renderLiveStrip();
   renderPeriods();
   renderSectorPie('overviewSectorPie');
-  renderLift();
 
   const pts = VKEYS.map(v => ({
     label: VARIANTS[v].label, color: VARIANTS[v].color,
@@ -617,7 +608,7 @@ function renderOverview() {
   });
 }
 
-/* The current, unfinished month: every sleeve's month-to-date against the
+/* The current, unfinished month: month-to-date against the
    benchmark and the two ETFs. Never folded into CAGR, Sharpe or drawdown. */
 function renderLiveStrip() {
   const card = document.getElementById('live-card');
@@ -787,64 +778,12 @@ function periodNote(x) {
   return `${x.months} mo` + (x.months > 12 && ann != null ? ` · ${pct(ann)} p.a.` : '');
 }
 
-/* Each overlay measured against the Equity Only control. */
-function renderLift() {
-  const base = M.runs[`${state.universe}_base`];
-  const rows = VKEYS.filter(v => v !== 'base').map(v => {
-    const r = M.runs[`${state.universe}_${v}`];
-    return {
-      label: VARIANTS[v].label, color: VARIANTS[v].color,
-      cagr: r.cagr - base.cagr,
-      vol: r.vol - base.vol,
-      sharpe: r.sharpe - base.sharpe,
-      dd: r.max_dd - base.max_dd,
-      beta: r.beta - base.beta
-    };
-  });
-
-  const cell = (v, fmt, goodUp) => {
-    const good = goodUp ? v > 0 : v < 0;
-    return `<td class="mono ${v === 0 ? '' : (good ? 'text-emerald' : 'text-rose')}">${fmt(v)}</td>`;
-  };
-
-  document.getElementById('lift-container').innerHTML = `
-    <table class="data-table">
-      <thead><tr>
-        <th>vs Equity Only</th><th>CAGR</th><th>Volatility</th><th>Sharpe</th><th>Max DD</th><th>Beta</th>
-      </tr></thead>
-      <tbody>${rows.map(r => `
-        <tr>
-          <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color};margin-right:.5rem"></span>${r.label}</td>
-          ${cell(r.cagr, v => spct(v, 2), true)}
-          ${cell(r.vol, v => spct(v, 2), false)}
-          ${cell(r.sharpe, v => snum(v, 2), true)}
-          ${cell(r.dd, v => spct(v, 2), true)}
-          ${cell(r.beta, v => snum(v, 2), false)}
-        </tr>`).join('')}
-      </tbody>
-    </table>
-    <p class="card-sub" style="margin-top:.75rem;display:block;line-height:1.5">
-      Green is the improvement direction: higher CAGR and Sharpe, lower volatility, shallower
-      drawdown, lower beta. Bullion is funded out of the stock sleeve, so any return given up
-      is the price paid for the risk reduction.
-    </p>`;
-}
-
 /* ══════════════════════════════════════════════
    HEATMAP
 ══════════════════════════════════════════════ */
 function renderHeatmapTab() {
-  document.getElementById('heatmap-variant-tabs').innerHTML = VKEYS.map(v =>
-    `<button class="layer-tab-btn ${v === state.heatVariant ? 'active' : ''}"
-       onclick="setHeatVariant('${v}')">${VARIANTS[v].short}</button>`).join('');
-  renderHeatmap(state.heatVariant);
+  renderHeatmap(SLEEVE);
 }
-
-function setHeatVariant(v) {
-  state.heatVariant = v;
-  renderHeatmapTab();
-}
-window.setHeatVariant = setHeatVariant;
 
 function renderHeatmap(variant) {
   const grid = {};
@@ -914,21 +853,26 @@ function retIn(u, v, monthStr) {
   const i = months(u).indexOf(monthStr);
   return i < 0 ? null : portRets(u, v)[i];
 }
+/* The month's return for a benchmark index. Used for MAQS's own benchmark and
+   for the two index context rows in the drill-down. Those two read other
+   universes' runs purely for their bench_ret, so this returns null rather than
+   throwing if a universe is not present in data.js. */
 function benchIn(u, monthStr) {
-  if (M.live && monthStr === M.live.month) return M.live.runs[`${u}_base`]?.bench_ret ?? null;
+  if (M.live && monthStr === M.live.month) return M.live.runs[`${u}_${SLEEVE}`]?.bench_ret ?? null;
+  if (!M.monthly[`${u}_${SLEEVE}`]) return null;
   const i = months(u).indexOf(monthStr);
   return i < 0 ? null : benchRets(u)[i];
 }
 
 let modalHolds = [];
 
-/* The book that produced a heatmap cell: the month's KPIs, every sleeve's return,
+/* The book that produced a heatmap cell: the month's KPIs, the strategy's return,
    and the actual holdings with their contributions. */
 function openHeatModal(monthStr) {
   const isLive = M.live && monthStr === M.live.month;
   if (!isLive && months().indexOf(monthStr) < 0) return;
 
-  const v = state.heatVariant;
+  const v = SLEEVE;
   const key = `${state.universe}_${v}`;
   const bench = benchIn(state.universe, monthStr);
   const bm = M.bullion_monthly, bi = isLive ? -1 : bm.months.indexOf(monthStr);
@@ -965,12 +909,12 @@ function openHeatModal(monthStr) {
       </div>
     </div>`;
 
-  /* ── every sleeve's return for the month ── */
+  /* ── the strategy's return for the month ── */
   const sleeveHtml = '<div style="margin-top:1rem">' + VKEYS.map(k => {
     const val = retIn(state.universe, k, monthStr);
     if (val == null) return '';
     const vs = bench == null ? null : val - bench;
-    return `<div class="modal-row"${k === v ? ' style="background:rgba(34,211,238,.06);border-radius:.4rem"' : ''}>
+    return `<div class="modal-row" style="background:rgba(34,211,238,.06);border-radius:.4rem">
       <div><div class="modal-metric" style="color:${VARIANTS[k].color}">${VARIANTS[k].label}</div></div>
       <div>
         <div class="modal-metric">Return</div>
@@ -1270,10 +1214,12 @@ function renderRisk() {
   mkChart('distChart', 'bar', {
     labels,
     datasets: [
-      { label: VARIANTS[state.variant].label, data: bucket(portRets()),
-        backgroundColor: VARIANTS[state.variant].color + 'cc' },
-      { label: 'Equity Only', data: bucket(portRets(state.universe, 'base')),
-        backgroundColor: VARIANTS.base.color + '88' }
+      { label: 'MAQS', data: bucket(portRets()),
+        backgroundColor: VARIANTS[SLEEVE].color + 'cc' },
+      // Was an Equity Only overlay; with one sleeve the benchmark is the
+      // comparison that remains meaningful.
+      { label: run().bench_name, data: bucket(benchRets()),
+        backgroundColor: BENCH_COLOR + '88' }
     ]
   }, {
     scales: { y: { title: { display: true, text: 'Months' }, ticks: { precision: 0 } } }
@@ -1384,22 +1330,9 @@ function renderMetrics() {
         <td class="text-muted" style="font-size:.68rem">${note}</td>
       </tr>`).join('')}</tbody>`;
 
-  document.getElementById('crossTable').innerHTML = `
-    <thead><tr><th>Universe</th>${VKEYS.map(v =>
-      `<th style="color:${VARIANTS[v].color}">${VARIANTS[v].short}</th>`).join('')}<th>Benchmark</th></tr></thead>
-    <tbody>${M.meta.universes.map(u => `
-      <tr${u.key === state.universe ? ' style="background:rgba(34,211,238,.06)"' : ''}>
-        <td>${u.name}</td>
-        ${VKEYS.map(v => {
-          const r = M.runs[`${u.key}_${v}`];
-          return `<td class="mono" style="line-height:1.5">
-            <span class="text-emerald">${pct(r.cagr, 1)}</span><br>
-            <span class="text-muted" style="font-size:.68rem">SR ${num(r.sharpe)} · DD ${pct(r.max_dd, 1)}</span>
-          </td>`;
-        }).join('')}
-        <td class="mono text-muted">${pct(M.runs[`${u.key}_base`].bench_cagr, 1)}<br>
-          <span style="font-size:.68rem">${M.runs[`${u.key}_base`].bench_name}</span></td>
-      </tr>`).join('')}</tbody>`;
+  // The cross-universe table is gone: MAQS reports one universe, so a table
+  // whose rows were Nifty 50 / Nifty 500 / All Indices / High Quality had
+  // nothing left to compare.
 }
 
 /* ══════════════════════════════════════════════
@@ -1677,7 +1610,7 @@ function renderChurning() {
          <span class="kpi-label">Churning Analysis</span>
          <span class="kpi-value" style="color:var(--slate)">N/A</span>
          <span class="kpi-delta">No monthly books are published for
-           ${UNIV_LABEL[state.universe]} · ${VARIANTS[state.variant].label}.</span>
+           ${UNIV_LABEL[state.universe] || state.universe} · ${VARIANTS[state.variant]?.label || state.variant}.</span>
        </div>`;
     ['churnSplitTable', 'churnTopTable', 'churnMonthTable'].forEach(id => {
       const el = document.getElementById(id); if (el) el.innerHTML = '';
@@ -1908,7 +1841,7 @@ function renderPortfolio() {
 
   const heldIn = M.live ? fmtMonth(M.live.month) : 'the following month';
   document.getElementById('book-sub').textContent =
-    `${UNIV_LABEL[state.universe]} — Equity + Gold + Silver book formed on the ${fmtMonth(b.portfolio_month + '-01')} close and held through ${heldIn}. This tab always shows the full overlay book, whichever sleeve is selected above.`;
+    `${UNIV_LABEL[state.universe]} — Equity + Gold + Silver book formed on the ${fmtMonth(b.portfolio_month + '-01')} close and held through ${heldIn}.`;
 
   renderHoldings();
   renderSectorPie('portSector');
@@ -2005,7 +1938,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  renderVariantTabs();
   renderSizingBar();
   renderHeader();
   renderTab('overview');
