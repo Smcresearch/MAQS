@@ -1777,20 +1777,22 @@ function renderChurning() {
 
   /* ── A. STOCKS HELD OVER TIME ──────────────── */
   const labels = rows.map(r => fmtMonth(r.month));
+  // Stacked on y, so the two bands sum to the month's total holding count and
+  // the top of the stack IS "stocks held". A separate total line would be
+  // redundant — and on a stacked scale Chart.js would stack that too, drawing
+  // it at twice the real figure.
   mkChart('churnHeldChart', 'line', {
     labels,
     datasets: [
-      { label: 'Long-term (held past threshold)', data: rows.map(r => r.lt),
-        borderColor: '#10b981', backgroundColor: '#10b98133', borderWidth: 2, tension: 0.25, fill: true },
       { label: 'Short-term', data: rows.map(r => r.st),
-        borderColor: '#f43f5e', backgroundColor: '#f43f5e33', borderWidth: 2, tension: 0.25, fill: true },
-      { label: 'Total held', data: rows.map(r => r.held),
-        borderColor: '#22d3ee', borderWidth: 2, borderDash: [5, 4], tension: 0.25, fill: false, pointRadius: 0 }
+        borderColor: '#f43f5e', backgroundColor: '#f43f5e55', borderWidth: 2, tension: 0.25, fill: true },
+      { label: `Long-term (held past ${rule.label.toLowerCase()})`, data: rows.map(r => r.lt),
+        borderColor: '#10b981', backgroundColor: '#10b98155', borderWidth: 2, tension: 0.25, fill: true }
     ]
   }, {
     scales: {
-      x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 12 } },
-      y: { stacked: false, beginAtZero: true, title: { display: true, text: 'Positions' } }
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+      y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Stocks held' } }
     }
   });
   document.getElementById('churn-held-sub').textContent =
