@@ -1,4 +1,6 @@
-# MAQS — All Indices, Equity + Gold + Silver
+# MAQS — Multi Assets Quant Strategy
+
+**MAQS** stands for **Multi Assets Quant Strategy**.
 
 Institutional-grade multi-asset portfolio analytics for the Sharpe Efficient
 Portfolio strategy run over the **All Indices** universe with a **fixed bullion

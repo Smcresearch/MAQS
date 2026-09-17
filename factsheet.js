@@ -18,7 +18,7 @@
 
   var CFG = {
     model:      'MAQS',
-    modelLong:  'MAQS — All Indices, Equity + Gold + Silver',
+    modelLong:  'MAQS — Multi Assets Quant Strategy',
     siteUrl:    'https://smcresearch.github.io/MAQS/',
     siteLabel:  'smcresearch.github.io/MAQS/',
     logo:       'assets/smc-logo.webp',
