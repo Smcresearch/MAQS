@@ -18,7 +18,13 @@ let state = {
   variant: 'goldsilver',
   tab: 'overview',
   heatVariant: 'goldsilver',
-  chartTypes: { equityOverview: 'line', equityMain: 'line', bullionChart: 'bar' }
+  // Long-term holding threshold in days, used by the Churning tab. 365 is the
+  // Indian listed-equity rule; the tab lets it be changed.
+  ltDays: 365,
+  chartTypes: {
+    equityOverview: 'line', equityMain: 'line', bullionChart: 'bar',
+    churnHeldChart: 'line', churnFlowChart: 'bar'
+  }
 };
 const charts = {};
 
@@ -448,8 +454,19 @@ function renderHeader() {
   const sizeNote = sizing.mode === 'amount'
     ? ` · sized for ${money(sizing.amount)}, whole shares`
     : ' · model book, ₹1 Cr';
+  // The silver sleeve cannot be funded before SILVERBEES lists (2022-05-10), so
+  // a window that opens earlier runs without it for its first months and says so
+  // here, rather than leaving a reader to assume all three assets were held
+  // throughout. Nothing is back-filled for those months.
+  const sw = w.silver_from;
+  const holdsSilver = state.variant === 'silver' || state.variant === 'goldsilver';
+  const noSilver = (holdsSilver && sw && sw > w.first)
+    ? ` · SILVERBEES lists 2022-05-10, so the first ${w.months_without_silver} months run `
+      + `${state.variant === 'goldsilver' ? '10% gold / 90% equity' : '100% equity'}`
+      + ` and the silver sleeve starts ${fmtMonth(sw)}`
+    : '';
   document.getElementById('backtest-period').textContent =
-    `Backtest: ${fmtMonth(w.first)} – ${fmtMonth(w.last)} · ${w.months} completed months · window starts at SILVERBEES inception (May 2022) · all metrics computed over this period${sizeNote}${liveNote}`;
+    `Backtest: ${fmtMonth(w.first)} – ${fmtMonth(w.last)} · ${w.months} completed months${noSilver} · all metrics computed over this period${sizeNote}${liveNote}`;
 
   /* The header regime badge ("Bullion: return up, drawdown down") was removed:
      it editorialised the sleeve comparison in the masthead, where the same
@@ -459,7 +476,9 @@ function renderHeader() {
   if (state.variant === 'base') {
     sub.textContent = '100% stocks — the control run every overlay is measured against.';
   } else {
-    sub.textContent = `${pct(r.stock_w, 0)} stocks · ${pct(r.gold_w, 0)} GOLDBEES · ${pct(r.silver_w, 0)} SILVERBEES — fixed weights of total capital, rebalanced monthly with the equity basket.`;
+    sub.textContent = `${pct(r.stock_w, 0)} stocks · ${pct(r.gold_w, 0)} GOLDBEES · ${pct(r.silver_w, 0)} SILVERBEES — `
+      + 'fixed weights of total capital, rebalanced monthly with the equity basket.'
+      + (noSilver ? ` Until ${fmtMonth(sw)} the silver weight goes to stocks, since SILVERBEES did not yet trade.` : '');
   }
 }
 
@@ -497,6 +516,7 @@ function renderTab(tab) {
   if (tab === 'risk')      renderRisk();
   if (tab === 'metrics')   renderMetrics();
   if (tab === 'bullion')   renderBullion();
+  if (tab === 'churning')  renderChurning();
   if (tab === 'portfolio') renderPortfolio();
 }
 
@@ -671,24 +691,46 @@ function periodRows(runKey) {
   const tail = n => all.slice(-n);
   const since = pfx => all.filter(r => r.trade_month >= pfx);
 
+  // [label, rows, months the period needs, always show the row]
+  // 1Y / 2Y / 3Y are the standard trailing set and always hold a row, so a
+  // universe without the history to fill one says so instead of quietly
+  // omitting the period (HQ's fundamental screen starts 2023-06, so it has
+  // fewer years behind it than the equity universes).
   const defs = [
-    ['3 Months', tail(3), 3],
-    ['6 Months', tail(6), 6],
-    ['Quarter to date', since(qStart), null],
-    ['Year to date', since(ly + '-01'), null],
-    ['1 Year', tail(12), 12],
-    ['Since inception', all, null]
+    ['3 Months', tail(3), 3, false],
+    ['6 Months', tail(6), 6, false],
+    ['Quarter to date', since(qStart), null, false],
+    ['Year to date', since(ly + '-01'), null, false],
+    ['1 Year', tail(12), 12, true],
+    ['2 Years', tail(24), 24, true],
+    ['3 Years', tail(36), 36, true],
+    ['Since inception', all, null, false]
   ];
   // A window longer than the available history would otherwise report a shorter
-  // span as though it were the full period, so those rows are dropped rather
-  // than mislabelled.
+  // span as though it were the full period, so it is reported as unavailable
+  // rather than mislabelled — never silently shortened.
   return defs
-    .filter(([, rows, need]) => rows.length && (need == null || all.length >= need))
-    .map(([label, rows]) => ({
-      label, months: rows.length,
-      val: compound(rows, 'port_ret'),
-      bench: compound(rows, 'bench_ret')
-    }));
+    .filter(([, rows, need, always]) => always || (rows.length && (need == null || all.length >= need)))
+    .map(([label, rows, need]) => {
+      const short = need != null && all.length < need;
+      return {
+        label, need, short,
+        months: short ? all.length : rows.length,
+        // Identical methodology at every horizon: the completed months of the
+        // period, compounded. 2Y and 3Y are NOT a different calculation from
+        // 1Y — only a longer slice of the same series.
+        val: short ? null : compound(rows, 'port_ret'),
+        bench: short ? null : compound(rows, 'bench_ret')
+      };
+    });
+}
+
+/* Cumulative return over `months` restated per year. Multi-year rows report the
+   cumulative figure (the house convention every other row uses) with this
+   alongside it, so a 3Y number is never mistaken for an annual one. */
+function annualise(v, months) {
+  if (v == null || !months || months < 12) return null;
+  return Math.pow(1 + v, 12 / months) - 1;
 }
 
 function renderPeriods() {
@@ -731,9 +773,18 @@ function renderPeriods() {
       <tbody>
         ${current}
         ${current ? '<tr><td colspan="4" style="height:.4rem;border:none"></td></tr>' : ''}
-        ${rows.map(x => line(x.label, `${x.months} mo`, x.val, x.bench, false)).join('')}
+        ${rows.map(x => line(x.label, periodNote(x), x.val, x.bench, false)).join('')}
       </tbody>
     </table>`;
+}
+
+/* The muted note beside a period's label: how many months it spans, plus the
+   per-year equivalent once a period runs beyond a year. A period the history
+   cannot fill says so rather than showing a shorter span as if it were whole. */
+function periodNote(x) {
+  if (x.short) return `n/a — needs ${x.need} mo, only ${x.months} of history`;
+  const ann = annualise(x.val, x.months);
+  return `${x.months} mo` + (x.months > 12 && ann != null ? ` · ${pct(ann)} p.a.` : '');
 }
 
 /* Each overlay measured against the Equity Only control. */
@@ -1460,6 +1511,373 @@ function renderBullion() {
       GOLDBEES back to ${fmtMonth(fh.GOLDBEES.start)}, SILVERBEES only to ${fmtMonth(fh.SILVERBEES.start)},
       which is what bounds the backtest window.
     </td></tr></tfoot>`;
+}
+
+/* ══════════════════════════════════════════════
+   CHURNING ANALYSIS
+   ──────────────────────────────────────────────
+   How long the book actually holds a name, and what that means for the tax
+   period it falls in.
+
+   Everything here is derived from MONTHLY_HOLDINGS — the engine's own book for
+   each trade month — rather than from trade counts. A position is HELD in every
+   month it appears in, so "how many stocks does this portfolio hold" is answered
+   by reading the chronological holding state, not by dividing trades by months.
+
+   A SPELL is one continuous holding: the same symbol appearing in consecutive
+   trade months. The same name leaving and returning later is two spells, which
+   is also how the tax period treats it — the clock restarts on re-entry.
+
+   The engine buys at the OPEN of a trade month and sells at the CLOSE of the
+   last month it holds, so a spell's holding period runs from the first day of
+   its first month to the last day of its last, and the shortest possible spell
+   is one month rather than zero days.
+
+   GOLDBEES and SILVERBEES are excluded throughout. They are a fixed-weight
+   sleeve rebalanced monthly, never churned, and an ETF is not taxed on the
+   equity holding period this tab is about — leaving them in would inflate every
+   long-term figure with two positions that are held by construction.
+══════════════════════════════════════════════ */
+
+/* Indian listed equity: long-term is a holding of MORE than 12 months.
+   Selectable because the rule is a policy input, not a property of the book —
+   and because a manager comparing against a different regime (or against the
+   pre-2018 36-month rule that still applies to unlisted names) should be able
+   to see the same portfolio under it. */
+const LT_RULES = [
+  { days: 365,  label: '12 Months', note: 'Indian listed equity — long-term is a holding of more than 12 months' },
+  { days: 730,  label: '24 Months', note: 'A 24-month rule, for comparison against other asset classes' },
+  { days: 1095, label: '36 Months', note: 'The 36-month rule that applies to unlisted and debt instruments' }
+];
+
+const MONTH_MS = 86400000;
+const mIdx = m => { const [y, n] = m.split('-').map(Number); return y * 12 + (n - 1); };
+const mStart = m => { const [y, n] = m.split('-').map(Number); return Date.UTC(y, n - 1, 1); };
+const mEnd = m => { const [y, n] = m.split('-').map(Number); return Date.UTC(y, n, 0); };
+/* Inclusive calendar days from the first day of `a` to the last day of `b`. */
+const spanDays = (a, b) => Math.round((mEnd(b) - mStart(a)) / MONTH_MS) + 1;
+
+const _churnCache = {};
+
+/* Walk the monthly books once and return every spell plus the per-month state.
+   Cached per run: the books never change within a page load, and a universe as
+   wide as All Indices carries thousands of spells. */
+function churnData(u = state.universe, v = state.variant) {
+  const key = `${u}_${v}`;
+  if (_churnCache[key]) return _churnCache[key];
+  if (typeof MONTHLY_HOLDINGS === 'undefined' || !MONTHLY_HOLDINGS[key]) return null;
+
+  const books = MONTHLY_HOLDINGS[key];
+  const months = Object.keys(books).sort();
+  if (!months.length) return null;
+  const last = months[months.length - 1];
+
+  // symbol -> the spell currently open for it, if any
+  const open = new Map();
+  const spells = [];
+  const byMonth = [];
+
+  months.forEach((m, i) => {
+    const here = new Set();
+    for (const h of books[m]) {
+      if (h.m) continue;                       // bullion sleeve — never churned
+      const sym = h.s;
+      here.add(sym);
+      const cur = open.get(sym);
+      // A gap of even one month ends the spell: the position was sold and the
+      // holding period restarts when it is bought back.
+      if (cur && mIdx(m) === mIdx(cur.endMonth) + 1) {
+        cur.endMonth = m;
+        cur.months += 1;
+        cur.contrib += (h.c || 0);
+      } else {
+        const s = { sym, startMonth: m, endMonth: m, months: 1, contrib: h.c || 0, startIdx: i };
+        spells.push(s);
+        open.set(sym, s);
+      }
+    }
+    // Anything open that is absent this month was exited at the previous close.
+    for (const [sym, s] of open) {
+      if (!here.has(sym) && mIdx(s.endMonth) < mIdx(m)) open.delete(sym);
+    }
+    byMonth.push({ month: m, held: here.size });
+  });
+
+  // A spell still in the final book has not been sold: its holding period is
+  // only what has elapsed so far, and it is NOT an exit. Counting open
+  // positions as exits would understate every holding period in the book.
+  spells.forEach(s => {
+    s.openNow = s.endMonth === last;
+    s.days = spanDays(s.startMonth, s.endMonth);
+  });
+
+  // Per-month entries / exits, and the point-in-time long/short split.
+  // The split is deliberately measured on AGE SO FAR, not on how the spell
+  // eventually ended: at any month in the past, only the elapsed holding period
+  // was knowable. Classifying a 2022 holding by a 2024 exit would be hindsight.
+  const spellsByStartIdx = new Map();
+  spells.forEach(s => {
+    if (!spellsByStartIdx.has(s.startIdx)) spellsByStartIdx.set(s.startIdx, []);
+    spellsByStartIdx.get(s.startIdx).push(s);
+  });
+
+  // A closed spell exits at the CLOSE of its final month, so it is booked
+  // against that month rather than the one it is first absent from.
+  const exitsIn = new Map();
+  spells.filter(s => !s.openNow).forEach(s =>
+    exitsIn.set(s.endMonth, (exitsIn.get(s.endMonth) || 0) + 1));
+
+  byMonth.forEach((row, i) => {
+    row.entered = (spellsByStartIdx.get(i) || []).length;
+    row.exited = exitsIn.get(row.month) || 0;
+    row.lt = 0; row.st = 0;
+  });
+
+  // Age each live position as of each month it was held in.
+  spells.forEach(s => {
+    for (let i = s.startIdx; i < s.startIdx + s.months; i++) {
+      const row = byMonth[i];
+      if (!row) continue;
+      if (spanDays(s.startMonth, row.month) > state.ltDays) row.lt += 1;
+      else row.st += 1;
+    }
+  });
+
+  const out = { key, months, last, spells, byMonth };
+  _churnCache[key] = out;
+  return out;
+}
+
+/* The LT threshold changes the classification but not the spells, so only the
+   age-dependent parts are recomputed. Simplest correct move: drop the cache. */
+function setChurnRule(days) {
+  state.ltDays = days;
+  Object.keys(_churnCache).forEach(k => delete _churnCache[k]);
+  renderChurning();
+}
+window.setChurnRule = setChurnRule;
+
+const cpct = (v, d = 2) => v == null || isNaN(v) ? '—' : (v >= 0 ? '+' : '') + Number(v).toFixed(d) + '%';
+const days2mo = d => d / 30.4375;
+
+function renderChurning() {
+  const d = churnData();
+  const rule = LT_RULES.find(r => r.days === state.ltDays) || LT_RULES[0];
+
+  document.getElementById('churn-rule-tabs').innerHTML = LT_RULES.map(r =>
+    `<button class="layer-tab-btn ${r.days === state.ltDays ? 'active' : ''}"
+       onclick="setChurnRule(${r.days})">${r.label}</button>`).join('');
+  document.getElementById('churn-rule-sub').textContent =
+    `${rule.note}. A position held longer than ${rule.days} days is long-term; anything sold sooner is short-term.`;
+
+  // No books for this universe/sleeve — say so rather than render empty tiles.
+  if (!d || !d.spells.length) {
+    document.getElementById('churnKpis').innerHTML =
+      `<div class="kpi-card" style="--accent:var(--slate);grid-column:1/-1">
+         <span class="kpi-label">Churning Analysis</span>
+         <span class="kpi-value" style="color:var(--slate)">N/A</span>
+         <span class="kpi-delta">No monthly books are published for
+           ${UNIV_LABEL[state.universe]} · ${VARIANTS[state.variant].label}.</span>
+       </div>`;
+    ['churnSplitTable', 'churnTopTable', 'churnMonthTable'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.innerHTML = '';
+    });
+    ['churnHeldChart', 'churnDistChart', 'churnFlowChart'].forEach(id => {
+      if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+    });
+    return;
+  }
+
+  const rows = d.byMonth;
+  const closed = d.spells.filter(s => !s.openNow);
+  const openNow = d.spells.filter(s => s.openNow);
+  const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+
+  const avgHeld = mean(rows.map(r => r.held));
+  const avgEntered = mean(rows.map(r => r.entered));
+  // Turnover as the book's own one-way rate: names replaced per month against
+  // names held. Exits rather than entries, so the in-progress month (which has
+  // entries but no exits yet) cannot inflate it.
+  const avgExited = mean(rows.slice(0, -1).map(r => r.exited));
+  const turnover = avgHeld ? avgExited / avgHeld : null;
+
+  const isLT = s => s.days > state.ltDays;
+  const ltClosed = closed.filter(isLT), stClosed = closed.filter(s => !isLT(s));
+  const uniq = arr => new Set(arr.map(s => s.sym)).size;
+
+  const liveNote = (M.live && d.last === M.live.month)
+    ? ` The final month (${fmtMonth(d.last)}) is the live book and is still open, so its positions count as held but not as exits.`
+    : '';
+
+  document.getElementById('churnKpis').innerHTML = [
+    { label: 'Avg Stocks Held', value: num(avgHeld, 1), color: 'var(--cyan)',
+      sub: `across ${rows.length} months, from the book itself` },
+    { label: 'Avg Holding Period', value: closed.length ? `${Math.round(mean(closed.map(s => s.days)))} d` : 'N/A',
+      color: 'var(--gold)',
+      sub: closed.length ? `${num(days2mo(mean(closed.map(s => s.days))), 1)} months per closed position` : 'no closed positions yet' },
+    { label: 'Unique Stocks Traded', value: uniq(d.spells), color: 'var(--violet)',
+      sub: `${d.spells.length} separate holdings` },
+    // Position entries and exits, NOT transaction counts: the book rebalances
+    // every holding every month, so counting trades would measure the
+    // rebalance schedule rather than the churn.
+    { label: 'Positions Opened / Closed', value: `${d.spells.length} / ${closed.length}`,
+      color: 'var(--slate)',
+      sub: `${openNow.length} still open at ${fmtMonth(d.last)}` },
+    { label: 'Monthly Turnover', value: turnover == null ? 'N/A' : pct(turnover, 1),
+      color: 'var(--rose)',
+      sub: turnover == null ? '—' : `${pct(turnover * 12, 0)} a year, one-way` },
+    { label: 'Long-Term Exits', value: closed.length ? pct(ltClosed.length / closed.length, 1) : 'N/A',
+      color: ltClosed.length >= stClosed.length ? 'var(--emerald)' : 'var(--rose)',
+      sub: `${ltClosed.length} of ${closed.length} sales held past ${rule.label.toLowerCase()}` }
+  ].map(k => `
+    <div class="kpi-card" style="--accent:${k.color}">
+      <span class="kpi-label">${k.label}</span>
+      <span class="kpi-value" style="color:${k.color}">${k.value}</span>
+      <span class="kpi-delta">${k.sub}</span>
+    </div>`).join('');
+
+  /* ── THE LONG/SHORT COMPARISON ─────────────── */
+  document.getElementById('churn-split-title').textContent =
+    `Long-Term vs Short-Term — ${VARIANTS[state.variant].label}`;
+  document.getElementById('churn-split-sub').innerHTML =
+    `${UNIV_LABEL[state.universe]} · ${fmtMonth(d.months[0])} – ${fmtMonth(d.last)} · equity positions only, bullion excluded. ` +
+    `<strong>Avg Stocks Held</strong> is measured point-in-time — each month a position counts as long-term once it has ` +
+    `<em>already</em> been held past ${rule.days} days — so no row uses knowledge of how the position was eventually sold. ` +
+    `Every other row describes closed positions, classified by the period they actually achieved.${liveNote}`;
+
+  const avgLT = mean(rows.map(r => r.lt)), avgST = mean(rows.map(r => r.st));
+  const contribOf = arr => arr.reduce((a, s) => a + s.contrib, 0);
+  const splitRow = (label, lt, st, cls = '') => `
+    <tr><td>${label}</td>
+      <td class="mono ${cls}" style="font-weight:600">${lt}</td>
+      <td class="mono ${cls}">${st}</td></tr>`;
+
+  document.getElementById('churnSplitTable').innerHTML = `
+    <thead><tr><th>Metric</th><th class="text-emerald">Long-Term</th><th class="text-rose">Short-Term</th></tr></thead>
+    <tbody>
+      ${splitRow('Avg stocks held', num(avgLT, 1), num(avgST, 1))}
+      ${splitRow('Avg holding period',
+        ltClosed.length ? `${Math.round(mean(ltClosed.map(s => s.days)))} d` : 'N/A',
+        stClosed.length ? `${Math.round(mean(stClosed.map(s => s.days)))} d` : 'N/A')}
+      ${splitRow('Stock exits', ltClosed.length, stClosed.length)}
+      ${splitRow('% of exits',
+        closed.length ? pct(ltClosed.length / closed.length, 1) : 'N/A',
+        closed.length ? pct(stClosed.length / closed.length, 1) : 'N/A')}
+      ${splitRow('% of holdings (point in time)',
+        avgHeld ? pct(avgLT / avgHeld, 1) : 'N/A',
+        avgHeld ? pct(avgST / avgHeld, 1) : 'N/A')}
+      ${splitRow('Unique stocks', uniq(ltClosed), uniq(stClosed))}
+      ${splitRow('Portfolio contribution', cpct(contribOf(ltClosed)), cpct(contribOf(stClosed)))}
+    </tbody>
+    <tfoot><tr><td colspan="3" class="text-muted" style="font-size:.7rem;line-height:1.5">
+      Contribution is the engine's own booked P&amp;L for those positions, as a share of capital, summed over every
+      month each was held. It is not the portfolio return: the two columns exclude the ${openNow.length}
+      position${openNow.length === 1 ? '' : 's'} still open and the bullion sleeve.
+    </td></tr></tfoot>`;
+
+  /* ── A. STOCKS HELD OVER TIME ──────────────── */
+  const labels = rows.map(r => fmtMonth(r.month));
+  mkChart('churnHeldChart', 'line', {
+    labels,
+    datasets: [
+      { label: 'Long-term (held past threshold)', data: rows.map(r => r.lt),
+        borderColor: '#10b981', backgroundColor: '#10b98133', borderWidth: 2, tension: 0.25, fill: true },
+      { label: 'Short-term', data: rows.map(r => r.st),
+        borderColor: '#f43f5e', backgroundColor: '#f43f5e33', borderWidth: 2, tension: 0.25, fill: true },
+      { label: 'Total held', data: rows.map(r => r.held),
+        borderColor: '#22d3ee', borderWidth: 2, borderDash: [5, 4], tension: 0.25, fill: false, pointRadius: 0 }
+    ]
+  }, {
+    scales: {
+      x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+      y: { stacked: false, beginAtZero: true, title: { display: true, text: 'Positions' } }
+    }
+  });
+  document.getElementById('churn-held-sub').textContent =
+    `Positions in the book each month — ${num(avgHeld, 1)} on average, ranging ` +
+    `${Math.min(...rows.map(r => r.held))} to ${Math.max(...rows.map(r => r.held))}.`;
+
+  /* ── C. HOLDING PERIOD DISTRIBUTION ────────── */
+  // Buckets are whole months because the book is monthly; each is split by the
+  // threshold so the long/short boundary is visible rather than described.
+  const BUCKETS = [[1, 1], [2, 3], [4, 6], [7, 9], [10, 12], [13, 18], [19, 24], [25, Infinity]];
+  const bLabel = ([a, b]) => b === Infinity ? '25+ mo' : (a === b ? `${a} mo` : `${a}–${b} mo`);
+  const bucketOf = s => BUCKETS.findIndex(([a, b]) => s.months >= a && s.months <= b);
+  const ltBars = BUCKETS.map(() => 0), stBars = BUCKETS.map(() => 0);
+  closed.forEach(s => {
+    const i = bucketOf(s);
+    if (i < 0) return;
+    (isLT(s) ? ltBars : stBars)[i] += 1;
+  });
+  mkChart('churnDistChart', 'bar', {
+    labels: BUCKETS.map(bLabel),
+    datasets: [
+      { label: 'Short-term', data: stBars, backgroundColor: '#f43f5e', borderWidth: 0 },
+      { label: 'Long-term', data: ltBars, backgroundColor: '#10b981', borderWidth: 0 }
+    ]
+  }, {
+    scales: {
+      x: { stacked: true, grid: { display: false } },
+      y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Closed positions' } }
+    }
+  });
+  document.getElementById('churn-dist-sub').textContent =
+    `${closed.length} closed position${closed.length === 1 ? '' : 's'} by how long each was held. ` +
+    `The colour change is the ${rule.label.toLowerCase()} boundary — a bucket can carry both where a ` +
+    `month-count straddles ${rule.days} days.`;
+
+  /* ── B. ENTRIES AND EXITS ──────────────────── */
+  mkChart('churnFlowChart', 'bar', {
+    labels,
+    datasets: [
+      { label: 'Entered', data: rows.map(r => r.entered), backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1 },
+      { label: 'Exited', data: rows.map(r => -r.exited), backgroundColor: '#f43f5e', borderColor: '#f43f5e', borderWidth: 1 }
+    ]
+  }, {
+    scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { beginAtZero: true } },
+    plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${Math.abs(c.parsed.y)}` } } }
+  });
+
+  /* ── MOST CHURNED NAMES ────────────────────── */
+  const bySym = new Map();
+  d.spells.forEach(s => {
+    const e = bySym.get(s.sym) || { sym: s.sym, spells: 0, months: 0, lt: 0, st: 0, contrib: 0, open: 0 };
+    e.spells += 1; e.months += s.months; e.contrib += s.contrib;
+    if (s.openNow) e.open += 1; else if (isLT(s)) e.lt += 1; else e.st += 1;
+    bySym.set(s.sym, e);
+  });
+  const top = [...bySym.values()]
+    .sort((a, b) => b.spells - a.spells || b.months - a.months)
+    .slice(0, 25);
+  document.getElementById('churnTopTable').innerHTML = `
+    <thead><tr><th>Stock</th><th>Entries</th><th>Months Held</th><th>Avg Spell</th>
+      <th class="text-emerald">LT</th><th class="text-rose">ST</th><th>Contribution</th></tr></thead>
+    <tbody>${top.map(e => `
+      <tr><td style="font-weight:600">${e.sym}</td>
+        <td class="mono">${e.spells}</td>
+        <td class="mono">${e.months}</td>
+        <td class="mono">${num(e.months / e.spells, 1)} mo</td>
+        <td class="mono text-emerald">${e.lt}</td>
+        <td class="mono text-rose">${e.st}</td>
+        <td class="mono ${tone(e.contrib)}">${cpct(e.contrib)}</td></tr>`).join('')}
+    </tbody>`;
+
+  /* ── MONTHLY DETAIL ────────────────────────── */
+  document.getElementById('churnMonthTable').innerHTML = `
+    <thead><tr><th>Month</th><th>Stocks Held</th>
+      <th class="text-emerald">Long-Term</th><th class="text-rose">Short-Term</th>
+      <th class="text-emerald">Entered</th><th class="text-rose">Exited</th>
+      <th>Turnover</th></tr></thead>
+    <tbody>${[...rows].reverse().map(r => `
+      <tr><td>${fmtMonth(r.month)}${r.month === d.last && M.live && d.last === M.live.month
+        ? ' <span class="text-muted" style="font-size:.7rem">live</span>' : ''}</td>
+        <td class="mono" style="font-weight:600">${r.held}</td>
+        <td class="mono text-emerald">${r.lt}</td>
+        <td class="mono text-rose">${r.st}</td>
+        <td class="mono text-emerald">${r.entered}</td>
+        <td class="mono text-rose">${r.exited}</td>
+        <td class="mono">${r.held ? pct(r.exited / r.held, 1) : '—'}</td></tr>`).join('')}
+    </tbody>`;
 }
 
 /* ══════════════════════════════════════════════

@@ -75,6 +75,7 @@
       <button class="nav-btn"        data-tab="risk"      onclick="switchTab('risk')">Risk &amp; Reward</button>
       <button class="nav-btn"        data-tab="metrics"   onclick="switchTab('metrics')">Performance Metrics</button>
       <button class="nav-btn"        data-tab="bullion"   onclick="switchTab('bullion')">Bullion Analytics</button>
+      <button class="nav-btn"        data-tab="churning"  onclick="switchTab('churning')">Churning Analysis</button>
       <button class="nav-btn"        data-tab="portfolio" onclick="switchTab('portfolio')">Live Portfolio</button>
     </nav>
 
@@ -389,6 +390,103 @@
     </section>
 
     <!-- ═══════════════════════════════════════ -->
+    <!-- TAB: CHURNING ANALYSIS                  -->
+    <!-- ═══════════════════════════════════════ -->
+    <section id="tab-churning" class="tab-pane">
+
+      <!-- HOLDING-PERIOD RULE (the only filter this tab adds) -->
+      <div class="glass-card" style="margin-bottom:1.25rem;padding:.75rem 1rem">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.75rem">
+          <div style="flex:1 1 320px">
+            <h3 class="card-title" style="font-size:.8rem">Long-Term Holding Threshold</h3>
+            <span class="card-sub" id="churn-rule-sub"></span>
+          </div>
+          <div class="layer-tabs" id="churn-rule-tabs"></div>
+        </div>
+      </div>
+
+      <div class="kpi-grid" id="churnKpis" style="margin-bottom:1.5rem"></div>
+
+      <!-- THE HEADLINE COMPARISON -->
+      <div class="glass-card" style="margin-bottom:1.5rem">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title" id="churn-split-title">Long-Term vs Short-Term</h3>
+            <span class="card-sub" id="churn-split-sub"></span>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table" id="churnSplitTable"></table>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:1.5rem">
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Stocks Held Over Time</h3>
+              <span class="card-sub" id="churn-held-sub">Positions in the book each month, split by how long they had been held</span>
+            </div>
+            <div class="chart-controls" data-for="churnHeldChart"></div>
+          </div>
+          <div class="chart-area">
+            <canvas id="churnHeldChart"></canvas>
+          </div>
+        </div>
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Holding Period Distribution</h3>
+              <span class="card-sub" id="churn-dist-sub">Closed positions by how long they were held</span>
+            </div>
+          </div>
+          <div class="chart-area">
+            <canvas id="churnDistChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:1.5rem">
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Entries and Exits</h3>
+              <span class="card-sub">Positions opened and closed each month</span>
+            </div>
+            <div class="chart-controls" data-for="churnFlowChart"></div>
+          </div>
+          <div class="chart-area-sm">
+            <canvas id="churnFlowChart"></canvas>
+          </div>
+        </div>
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Most Churned Names</h3>
+              <span class="card-sub">Stocks the book entered most often</span>
+            </div>
+          </div>
+          <div style="overflow-x:auto;max-height:340px">
+            <table class="data-table mini-table" id="churnTopTable"></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Monthly Churning Detail</h3>
+            <span class="card-sub">Held, entered and exited month by month</span>
+          </div>
+        </div>
+        <div style="overflow-x:auto;max-height:460px">
+          <table class="data-table" id="churnMonthTable"></table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ═══════════════════════════════════════ -->
     <!-- TAB: LIVE PORTFOLIO                     -->
     <!-- ═══════════════════════════════════════ -->
     <section id="tab-portfolio" class="tab-pane">
@@ -463,9 +561,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
   <!-- Data must load before app -->
-  <script src="data.js?v=10"></script>
-  <script src="holdings.js?v=10"></script>
-  <script src="app.js?v=10"></script>
-  <script src="factsheet.js?v=10"></script>
+  <script src="data.js?v=11"></script>
+  <script src="holdings.js?v=11"></script>
+  <script src="app.js?v=11"></script>
+  <script src="factsheet.js?v=11"></script>
 </body>
 </html>

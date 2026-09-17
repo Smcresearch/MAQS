@@ -358,9 +358,11 @@
         'discounts to NAV.') +
       risk('Model Risk', 'Past performance is not a guarantee of future results. Quantitative models ' +
         'may underperform during regime changes or unprecedented market events.') +
-      risk('History Risk', 'The backtest window is bounded by SILVERBEES&rsquo; own price history and ' +
-        'covers ' + num(R.months, 0) + ' months from ' + esc(monthName(F.first)) + '. That is a shorter ' +
-        'record than the equity-only strategies, and it does not span a full market cycle.') +
+      risk('History Risk', 'The backtest covers ' + num(R.months, 0) + ' months from ' +
+        esc(monthName(F.first)) + '. That is a shorter record than the equity-only strategies, and it ' +
+        'does not span a full market cycle. SILVERBEES only lists on 10 May 2022, so the earliest ' +
+        'months carry no silver sleeve at all &mdash; that weight is held in equities instead, and no ' +
+        'silver price is invented for months the ETF did not trade.') +
     '</div>' +
   '</div>' +
 
@@ -418,9 +420,10 @@
       'hindsight, and have inherent limitations. They have not been validated by an independent ' +
       'chartered accountant, nor verified by the Past Risk and Return Verification Agency (PaRRVA) ' +
       'or any other agency recognised by SEBI.<br><br>' +
-      'The backtest window is bounded by the price history of the silver ETF and spans ' +
-      num(R.months, 0) + ' months. A window this short does not cover a full market cycle, and the ' +
-      'diversification benefit of the bullion sleeve observed over it may not persist.' +
+      'The backtest spans ' + num(R.months, 0) + ' months. A window this short does not cover a full ' +
+      'market cycle, and the diversification benefit of the bullion sleeve observed over it may not ' +
+      'persist. SILVERBEES lists on 10 May 2022, so the opening months of the window hold no silver ' +
+      'and run an equity-heavier book; the silver sleeve begins only once the ETF has price history.' +
     '</div>' +
   '</div>' +
 

@@ -23,13 +23,47 @@ alongside the equity basket. Metals never compete with stocks for a slot.
 
 ## Backtest window
 
-**Jun 2022 – Jun 2026 (49 completed months)**, identical for every universe and
-every sleeve so the comparison is like-for-like. The start is set by SILVERBEES
-inception (10 May 2022) — there is no silver price history before that, so no
-earlier window can contain a genuine three-asset portfolio.
+**Jan 2022 – latest completed month**, identical for every sleeve within a
+universe so the comparison is like-for-like.
 
 Returns follow the engine's trade convention: the basket is formed on the signal
 month's close, bought at the trade month's open and sold at its close.
+
+### SILVERBEES history and the sleeve it changes
+
+The silver ETF's price history in this repo starts on **10 May 2022**
+(`NSE_SILVERBEES, 1D.csv`, first data row `2022-05-10`); GOLDBEES goes back to
+29 May 2012. So for the opening trade months of the window there is no
+SILVERBEES price at all, and no silver position can honestly be held.
+
+The engine decides this from the data, not from a hardcoded date: a metal with
+no usable price history as of the signal month is simply absent from that
+month's book, and the weight it would have taken goes to the **stock** sleeve
+rather than sitting in cash, so the portfolio is fully invested throughout.
+
+| Trade months | Stocks | Gold | Silver |
+|---|---|---|---|
+| 2022-01 – 2022-05 (no silver data) | 90% | 10% | 0% |
+| 2022-06 onward | 80% | 10% | 10% |
+
+The first fully funded silver month is **Jun 2022**: that book is formed on the
+May 2022 close, by which point SILVERBEES has been trading since 10 May.
+
+Nothing is forward-filled or synthesised for the months silver did not exist.
+Those months are `null` in every silver series in `data.js` — never `0`, which
+would read as "silver was flat that month" — and every standalone SILVERBEES
+statistic (CAGR, volatility, drawdown, correlation) is measured only over the
+months it actually traded, with the benchmark and risk-free series sliced to
+match. `data.js` records the boundary as `meta.window.silver_from` and
+`meta.window.months_without_silver`.
+
+### High Quality starts later
+
+The HQ universe begins **2023-06**, not 2022-01. Its fundamental screen is driven
+by `quarterly_eligibility.csv`, whose first hold month is 2023-06. That is a
+limit of the source data, so the HQ window is shorter by design, and its
+trailing-return table reports any period it cannot fill as `N/A` rather than
+quietly spanning fewer months.
 
 ### The live month
 
@@ -152,13 +186,71 @@ visible rather than silently truncated.
 The model's own result stays on screen underneath, clearly labelled, so the two
 are never confused.
 
+## Churning Analysis
+
+How long the book actually holds a name, and which tax period that lands in.
+
+Everything on this tab is read off `MONTHLY_HOLDINGS` — the engine's own book for
+each trade month — rather than inferred from trade counts. A position is *held*
+in every month it appears in, so **Avg Stocks Held** is the mean of the monthly
+position counts, not `total trades / months`.
+
+A **spell** is one continuous holding: the same symbol in consecutive trade
+months. A name that leaves and comes back later is two spells, which is also how
+the holding period treats it — the clock restarts on re-entry. Because the engine
+buys at a trade month's open and sells at its last month's close, a spell runs
+from the first day of its first month to the last day of its last, so the
+shortest possible holding is one month rather than zero days.
+
+**Long-term threshold** — 365 days by default (Indian listed equity: long-term is
+a holding of *more* than 12 months). It is a selector, not a constant, because
+the rule is a policy input rather than a property of the book; 24- and 36-month
+rules are available for comparison. Exactly 12 months is *not* long-term.
+
+Two different classifications are shown, and the tab says which is which:
+
+- **Avg stocks held (long/short)** is point-in-time. In each month a position
+  counts as long-term once it has *already* been held past the threshold. It
+  never uses knowledge of how the position was eventually sold.
+- **Exits, holding periods and contribution** describe closed positions by the
+  period they actually achieved.
+
+Positions still open in the final book are counted as held but never as exits —
+counting them as sales would understate every holding period. GOLDBEES and
+SILVERBEES are excluded throughout: they are a fixed-weight sleeve that is never
+churned, and an ETF is not taxed on the equity holding period this tab is about.
+
+**Positions opened / closed** counts position entries and exits, not trades. The
+book rebalances every holding every month, so a transaction count would measure
+the rebalance schedule rather than the churn.
+
+Two limits worth stating plainly:
+
+- The published book is **monthly**, so the shortest holding this data can
+  express is one month. A name bought and sold within a single month never
+  reaches a book and cannot appear here.
+- A security that is delisted, or that drops out of the price data, ends its
+  spell in the same way a sale does. The monthly books carry no exit reason, so
+  the two are indistinguishable from this data.
+
+The tab follows the universe and sleeve selectors like every other tab. There is
+no global date-range filter on this dashboard, so it covers the whole backtest
+window. It does not vary with **Portfolio Size**, because `sizeBook()` keeps at
+least one share of every holding, so the set of names is the same at any amount.
+
 ## Files
 - `index.html` — page shell and layout
 - `style.css` — styling (shared with the other SQE terminals)
 - `app.js` — rendering logic and interactivity
 - `data.js` — precomputed dashboard data (`MULTIASSET_DATA`)
-- `holdings.js` — per-month books for the drill-down (`MONTHLY_HOLDINGS`,
-  `MONTH_META`, `SECTOR_MAP`)
+- `holdings.js` — per-month books for the drill-down and the Churning tab
+  (`MONTHLY_HOLDINGS`, `MONTH_META`, `SECTOR_MAP`)
+- `test_terminal.js` — `node test_terminal.js`. Loads the real `app.js` against
+  the real data with a stub DOM and checks the churning reconstruction (every
+  book's positions accounted for by exactly one spell, entries and exits
+  reconciling, the 365-day boundary) and the trailing-return periods (1Y/2Y/3Y
+  are the same calculation over a longer slice; a period the history cannot fill
+  reports `N/A`). Run it after touching either.
 
 ## Where the numbers come from
 
