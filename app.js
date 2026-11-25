@@ -215,6 +215,11 @@ function maList(u = state.universe) {
 }
 const maName = k => M.ma_bench[k].name;
 function maRets(k, u = state.universe) { return months(u).map(m => M.ma_bench[k].rets[m]); }
+/* Month-to-date of the unfinished month, only when it is the same month MAQS shows live. */
+function maLive(k) {
+  const l = M.ma_bench?.[k]?.live;
+  return l && M.live && l.month === M.live.month ? l.ret : null;
+}
 const maLines = fn => maList().map(k => ({
   label: maName(k), data: fn(maRets(k)), borderColor: MA_COLORS[k],
   borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false
@@ -664,7 +669,8 @@ function renderLiveStrip() {
   const assets = [
     { label: run().bench_name, color: BENCH_COLOR, val: bench, vs: null },
     { label: 'GOLDBEES', color: '#f4b942', val: M.live.gold, vs: null },
-    { label: 'SILVERBEES', color: '#9fb3c8', val: M.live.silver, vs: null }
+    { label: 'SILVERBEES', color: '#9fb3c8', val: M.live.silver, vs: null },
+    ...maList().map(k => ({ label: maName(k), color: MA_COLORS[k], val: maLive(k), vs: null }))
   ];
 
   const line = r => `
@@ -780,27 +786,35 @@ function renderPeriods() {
       <td class="mono ${tone(val)}" style="font-weight:600">${val == null ? '—' : spct(val)}</td>
       <td class="mono ${tone(bench)}">${bench == null ? '—' : spct(bench)}</td>
       <td class="mono ${vs == null ? '' : tone(vs)}" style="font-weight:600">${vs == null ? '—' : spct(vs)}</td>
-      ${mas.map(k => `<td class="mono ${tone(ma[k])}">${ma[k] == null ? '—' : spct(ma[k])}</td>`).join('')}
+      ${mas.map(k => {
+        const m = ma[k], d = (val != null && m != null) ? val - m : null;
+        return `<td class="mono ${tone(m)}">${m == null ? '—' : spct(m)}</td>
+      <td class="mono ${d == null ? '' : tone(d)}" style="font-weight:600">${d == null ? '—' : spct(d)}</td>`;
+      }).join('')}
     </tr>`;
   };
 
   const current = lr
     ? line(`Current — ${fmtMonth(M.live.month)}`, 'month to date, not final',
-           lr.port_ret, lr.bench_ret, true)
+           lr.port_ret, lr.bench_ret, true,
+           Object.fromEntries(mas.map(k => [k, maLive(k)])))
     : '';
 
+  // 'vs MA …' = MAQS return less that index's return over the same period.
+  const maShort = k => maName(k).replace('NSE Multi Asset ', 'MA ');
   document.getElementById('periods-container').innerHTML = `
-    <table class="data-table">
+    <div style="overflow-x:auto"><table class="data-table">
       <thead><tr>
         <th>Period</th><th>Return</th><th>${r.bench_name}</th><th>vs Benchmark</th>
-        ${mas.map(k => `<th style="color:${MA_COLORS[k]}">${maName(k)}</th>`).join('')}
+        ${mas.map(k => `<th style="color:${MA_COLORS[k]}">${maName(k)}</th>
+        <th style="color:${MA_COLORS[k]}">vs ${maShort(k)}</th>`).join('')}
       </tr></thead>
       <tbody>
         ${current}
-        ${current ? `<tr><td colspan="${4 + mas.length}" style="height:.4rem;border:none"></td></tr>` : ''}
+        ${current ? `<tr><td colspan="${4 + 2 * mas.length}" style="height:.4rem;border:none"></td></tr>` : ''}
         ${rows.map(x => line(x.label, periodNote(x), x.val, x.bench, false, x.ma)).join('')}
       </tbody>
-    </table>`;
+    </table></div>`;
 }
 
 /* The muted note beside a period's label: how many months it spans, plus the
@@ -935,7 +949,7 @@ function openHeatModal(monthStr) {
       </div>
       ${M.ma_bench ? Object.keys(M.ma_bench).map(k => `<div>
         <div class="modal-metric">${maName(k)}</div>
-        <div class="modal-val" style="color:${MA_COLORS[k]}">${spct(M.ma_bench[k].rets[monthStr])}</div>
+        <div class="modal-val" style="color:${MA_COLORS[k]}">${spct(M.ma_bench[k].rets[monthStr] ?? (isLive ? maLive(k) : null))}</div>
       </div>`).join('') : ''}
       <div>
         <div class="modal-metric">Portfolio Beta</div>
