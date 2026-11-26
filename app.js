@@ -208,7 +208,7 @@ function benchRets(u = state.universe) { return mon(u, SLEEVE).map(r => r.bench_
    BESIDE the Nifty 500 — which stays the benchmark behind alpha, beta and "Beat".
    A benchmark missing any of the window's months is left out entirely rather
    than drawn with a silent gap. */
-const MA_COLORS = { MA1: '#a78bfa', MA2: '#f472b6' };
+const MA_COLORS = { MA1: '#a78bfa', MA2: '#f472b6', BSE500: '#34d399' };
 function maList(u = state.universe) {
   if (!M.ma_bench) return [];
   return Object.keys(M.ma_bench).filter(k => months(u).every(m => M.ma_bench[k].rets[m] != null));
